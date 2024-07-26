@@ -1,2 +1,2 @@
 # Jem
-Just a simple modern C++ (17) library for parsing JSON.
+Just a simple single-header, modern C++(17) library for parsing JSON.
