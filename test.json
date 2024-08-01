@@ -1,8 +1,15 @@
 [
   {
-    "key": "F",
+    "key": null,
     ":)": [
       "E"
+    ]
+  },
+
+  {
+    "key": "ctrl +",
+    "task": [
+      "do the laundry"
     ]
   }
 ]

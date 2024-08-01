@@ -3,7 +3,8 @@
 
 
 int main() {
-    jem::Json json("/home/in-diaonic/Programming/Jem/test.json");
+    jem::Json json(std::filesystem::path("/home/in-diaonic/Programming/Jem/test.json"));
     auto e = json.dump();
-    std::cout << e.getList().at(0).getObject()[":)"].getList().at(0).getString() << std::endl;
+
+    std::cout << e.toList()[1].toObject()["task"].toList()[0].toString() << std::endl;
 }

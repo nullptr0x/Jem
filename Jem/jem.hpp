@@ -187,38 +187,40 @@ private:
         setReturnPoint();
 
         if (m_Stream.eof()) {return {NONE, "null"};}
-        auto chr = m_Stream.peek();
-        if (chr == '"') return readString();
-        if (chr == '\'') return readString('\'');
-        if (isDigit(chr)) return readNumber();
-        if (chr == 't') {
-            return {
-                .type  = BOOL,
-                .value = readWhile(isId)
-            };
+
+        char chr = m_Stream.peek();
+
+        switch (chr) {
+            case '"':
+                return readString();
+
+            case '\'':
+                return readString('\'');
+
+            case 't':
+            case 'f':
+            case 'n': {
+                TokenType type;
+                if (chr == 't') type = BOOL;
+                else if (chr == 'f') type = BOOL;
+                else type = J_NULL;
+
+                return {
+                        .type = type,
+                        .value = readWhile(isId)
+                };
+            }
+
+            default:
+                if (isDigit(chr)) return readNumber();
+                if (isPunctuation(chr)) {
+                    m_Ret = std::string(1, m_Stream.next());
+                    return {
+                            PUNC,
+                            m_Ret
+                    };
+                }
         }
-
-        if (chr == 'f') {
-            return {
-                .type = BOOL,
-                .value = readWhile(isId)
-            };
-        }
-
-        if (chr == 'n') {
-            return {
-                .type = J_NULL,
-                .value = readWhile(isId)
-            };
-        }
-
-        m_Ret = std::string(1, m_Stream.next());
-
-        if (isPunctuation(chr) ) return {
-                    PUNC,
-                    m_Ret,
-            };
-
 
         throw std::runtime_error("[FATAL]: No valid token found");
     }
