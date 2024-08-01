@@ -13,7 +13,7 @@
 #pragma once
 namespace {
 enum TokenType {
-    PUNC, STRING, NUMBER, BOOL, NONE, _NONE
+    PUNC, STRING, NUMBER, BOOL, J_NULL, NONE, _NONE
 };
 
 struct Token {
@@ -205,6 +205,13 @@ private:
             };
         }
 
+        if (chr == 'n') {
+            return {
+                .type = J_NULL,
+                .value = readWhile(isId)
+            };
+        }
+
         m_Ret = std::string(1, m_Stream.next());
 
         if (isPunctuation(chr) ) return {
@@ -276,39 +283,60 @@ public:
 }
 
 namespace jem {
-
 struct JSON_t;
 
 using JSObject = std::unordered_map<std::string, JSON_t>;
 using JSList   = std::vector<JSON_t>;
 
-struct JSON_t : std::variant<std::string, bool, JSObject, JSList> {
+
+class JSON_t : std::variant<std::string, bool, JSObject, JSList, std::nullptr_t> {
+    template<typename T>
+    inline void checkSafety() const {
+        if (CheckSafety) {
+            if (std::holds_alternative<std::nullptr_t>(*this))
+                throw std::runtime_error("the JSON value is null");
+            if (!std::holds_alternative<T>(*this))
+                throw std::runtime_error("call to an incorrect function for the type");
+        }
+    }
+
+public:
     using variant::variant;
+    static bool CheckSafety;
 
     [[nodiscard]] std::string toString() const {
+        checkSafety<std::string>();
         return std::get<std::string>(*this);
     }
 
     [[nodiscard]] bool toBool() const {
+        checkSafety<bool>();
         return std::get<bool>(*this);
     }
 
+    [[nodiscard]] bool isNull() const {
+        return std::holds_alternative<std::nullptr_t>(*this);
+    }
+
     [[nodiscard]] JSObject toObject() const {
+        checkSafety<JSObject>();
         return std::get<JSObject>(*this);
     }
 
     [[nodiscard]] JSList toList() const {
+        checkSafety<JSList>();
         return std::get<JSList>(*this);
     }
 
     template <typename ItemType>
     [[nodiscard]] ItemType getAt(std::size_t index) const {
-        return std::get<ItemType>(std::get<JSList>(*this)[index]);
+        auto item = this->toList().at(index);
+        return std::get<ItemType>(item);
     }
 
     template <typename ItemType>
     [[nodiscard]] ItemType getFromKey(const std::string& key) {
-        return std::get<ItemType>(std::get<JSObject>(*this)[key]);
+        return std::get<ItemType>(this->toObject()[key]);
     }
 
     [[nodiscard]] std::string getStringAt(std::size_t index) const {
@@ -320,6 +348,7 @@ struct JSON_t : std::variant<std::string, bool, JSObject, JSList> {
     }
 };
 
+bool JSON_t::CheckSafety = true;
 
 class Json {
     std::ifstream m_FStream;
@@ -363,6 +392,10 @@ class Json {
                     m_Stream.next();
                     continue;
                     break;
+                case J_NULL:
+                    ret[key] = nullptr;
+                    m_Stream.next();
+                    continue;
                 default:
                     ret[key] = m_Stream.p_CurTk.value;
                     m_Stream.next();
@@ -395,6 +428,10 @@ class Json {
                     } break;
                 case BOOL:
                     ret.emplace_back(m_Stream.p_CurTk.value[0] == 't');
+                    m_Stream.next();
+                    break;
+                case J_NULL:
+                    ret.emplace_back(nullptr);
                     m_Stream.next();
                     break;
                 default:
@@ -436,6 +473,9 @@ public:
                 } break;
             case BOOL:
                 m_JSON = ftk.value[0] == 't';
+                return m_JSON;
+            case J_NULL:
+                m_JSON = nullptr;
                 return m_JSON;
             default:
                 m_JSON = std::move(ftk.value);
