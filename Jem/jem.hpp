@@ -1,20 +1,17 @@
 #include <functional>
-#include <memory>
 #include <string>
 #include <fstream>
 #include <unordered_map>
 #include <vector>
 #include <variant>
 #include <cstdint>
-#include <iterator>
-#include <stack>
 #include <optional>
 #include <iostream>
 
 
 #pragma once
 namespace {
-enum TokenType : uint8_t {
+enum TokenType {
     PUNC, STRING, NUMBER, BOOL, NONE, _NONE
 };
 
@@ -232,6 +229,7 @@ public:
         m_Cache.Col  = m_Stream.Col;
     }
 
+
     void restoreCache() {
         m_Stream.Pos  = m_Cache.Pos;
         m_Stream.Line = m_Cache.Line;
@@ -239,22 +237,20 @@ public:
     }
 
     /* An abstraction over readNextTok. */
-    Token next(bool _readNewLines = false, bool _readWhitespaces = false, bool _modifyCurTk = true) {
+    Token next(bool modify_pCur = true) {
         Token cur_tk = readNextTok();
 
-        // discard whitespaces
-        if (!_readWhitespaces)
-            while ((cur_tk.type == PUNC && cur_tk.value == " ")) {
-                cur_tk = readNextTok();
-            }
+        // discard all the junk
+        while (cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) {
+            cur_tk = readNextTok();
+        }
 
-        // discard newlines
-        if (!_readNewLines)
-            while (cur_tk.type == PUNC && cur_tk.value == "\n") {
-                cur_tk = readNextTok();
-            }
+        while (cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) {
+            cur_tk = readNextTok();
+        }
 
-        if (_modifyCurTk) { p_CurTk = cur_tk; }
+
+        if (modify_pCur) p_CurTk = cur_tk;
         return cur_tk;
     }
 
@@ -267,7 +263,7 @@ public:
             restoreCache();
             return {NONE, "NULL"};  // Return token with type NONE and empty value
         }
-        p_PeekTk = next(false, false, false);
+        p_PeekTk = next(false);
         restoreCache();
         return p_PeekTk;
     }
@@ -287,13 +283,44 @@ using JSList   = std::vector<JSON_t>;
 
 struct JSON_t : std::variant<std::string, bool, JSObject, JSList> {
     using variant::variant;
+
+    [[nodiscard]] std::string getString() const {
+        return std::get<std::string>(*this);
+    }
+
+    [[nodiscard]] bool getBool() const {
+        return std::get<bool>(*this);
+    }
+
+    [[nodiscard]] JSObject getObject() const {
+        return std::get<JSObject>(*this);
+    }
+
+    [[nodiscard]] JSList getList() {
+        return std::get<JSList>(*this);
+    }
+
+    template <typename ItemType>
+    [[nodiscard]] ItemType getAt(std::size_t index) const {
+        return std::get<ItemType>(std::get<JSList>(*this)[index]);
+    }
+
+    template <typename ItemType>
+    [[nodiscard]] ItemType getFromKey(const std::string& key) {
+        return std::get<ItemType>(std::get<JSObject>(*this)[key]);
+    }
+
+    [[nodiscard]] std::string getStringAt(std::size_t index) const {
+        return getAt<std::string>(index);
+    }
+
+    [[nodiscard]] bool getBoolAt(std::size_t index) const {
+        return getAt<bool>(index);
+    }
 };
 
 
 class Json {
-    using variant_t = std::variant<JSObject, std::vector<JSON_t>>;
-    std::stack<std::shared_ptr<variant_t>> m_Scopes;
-
     std::ifstream m_FStream;
     std::string   m_Src;
 
@@ -301,55 +328,83 @@ class Json {
     TokenStream   m_Stream;
     JSON_t        m_JSON;
 
-    // this method assumes the stream to be +1 after the opening brace
-    void parseObject() {
-        std::string cur_key;
+    JSObject parseObject() {
+        // this method assumes the stream to be +1 after the opening brace
+        std::string key = m_Stream.p_CurTk.value; m_Stream.next();
+        JSObject ret;
 
-        if (m_Stream.p_CurTk.type == STRING) {
-            cur_key = m_Stream.p_CurTk.value;
-
-            switch (m_Stream.next().type) {
+        m_Stream.next();  // consume the colon
+        while (!(m_Stream.p_CurTk.type == PUNC && m_Stream.p_CurTk.value == "}")) {
+            switch (m_Stream.p_CurTk.type) {
                 case PUNC:
-                    break;
-                case STRING:
-                    break;
-                case NUMBER:
+                    if (m_Stream.p_CurTk.value == ",") {
+                        key = m_Stream.next().value;
+                        m_Stream.next();
+                        continue;
+                    }
+                    else if (m_Stream.p_CurTk.value == ":") {
+                        m_Stream.next();
+                        continue;
+                    }
+                    else if (m_Stream.p_CurTk.value == "{") {
+                        m_Stream.next();
+                        ret[key] = parseObject();
+                        continue;
+                    }
+                    else if (m_Stream.p_CurTk.value == "[") {
+                        m_Stream.next();
+                        ret[key] = parseList();
+                        continue;
+                    }
                     break;
                 case BOOL:
+                    ret[key] = m_Stream.p_CurTk.value[0] == 't';
+                    m_Stream.next();
+                    continue;
                     break;
                 default:
+                    ret[key] = m_Stream.p_CurTk.value;
+                    m_Stream.next();
+                    continue;
+            }
+        }
+        m_Stream.next();
+        return ret;
+    }
+
+    JSList parseList() {
+        // this method assumes the stream to be +1 after the opening bracket
+        JSList ret;
+
+        while (!(m_Stream.p_CurTk.type == PUNC && m_Stream.p_CurTk.value == "]")) {
+            switch (m_Stream.p_CurTk.type) {
+                case PUNC:
+                    switch (m_Stream.p_CurTk.value[0]) {
+                        case '{':
+                            m_Stream.next();
+                            ret.emplace_back(parseObject());
+                            break;
+                        case '[':
+                            m_Stream.next();
+                            ret.emplace_back(parseList());
+                            break;
+                        case ',':
+                            m_Stream.next();
+                            continue;
+                    } break;
+                case BOOL:
+                    ret.emplace_back(m_Stream.p_CurTk.value[0] == 't');
+                    m_Stream.next();
+                    break;
+                default:
+                    ret.emplace_back(std::move(m_Stream.p_CurTk.value));
+                    m_Stream.next();
                     break;
             }
-        } else if (m_Stream.p_CurTk.type == PUNC && m_Stream.p_CurTk.value == "}") {
-            *m_Scopes.top() = JSObject();
-            m_Scopes.pop();
         }
-    }
 
-    void parseList() {
-
-    }
-
-    template <typename T>
-    void parseLiteral(const std::optional<std::string>& key = std::nullopt) {
-        static_assert(std::is_same_v<T, bool> || std::is_same_v<T, std::string>);
-
-        // Assuming the current token to be the literal itself
-        if (key.has_value()) {
-            auto obj = std::get<JSObject>(*m_Scopes.top());
-            if constexpr (std::is_same_v<T, bool>)
-                 obj[key.value()] = m_Stream.p_CurTk.value[0] == 't';
-            else obj[key.value()] = m_Stream.p_CurTk.value;
-        } else if (!m_Scopes.empty() && std::holds_alternative<JSList>(*m_Scopes.top())) {
-            auto obj = std::get<JSList>(*m_Scopes.top());
-            if constexpr (std::is_same_v<T, bool>)
-                 obj.emplace_back(m_Stream.p_CurTk.value[0] == 't');
-            else obj.emplace_back(m_Stream.p_CurTk.value);
-        } else {
-            if constexpr (std::is_same_v<T, bool>)
-                 m_JSON = m_Stream.p_CurTk.value[0] == 't';
-            else m_JSON = m_Stream.p_CurTk.value;
-        }
+        m_Stream.next();
+        return ret;
     }
 
 public:
@@ -367,35 +422,31 @@ public:
     void constructWithString(const std::string& source) noexcept { m_Src = source; }
 
     const JSON_t& dump(const std::optional<std::string>& key = std::nullopt) {
-        Token ftk     = m_Stream.next();
-        bool  is_obj  = false;
+        Token ftk    = m_Stream.next();
+        bool  is_obj = false;
 
         switch (ftk.type) {
             case PUNC:
                 if (ftk.value == "{") {
-                    auto o = std::make_shared<variant_t>(JSObject());
-                    m_Scopes.push(o);
-                    m_JSON = std::get<JSObject>(*o);
-                    is_obj = true;
+                    m_Stream.next();
+                    m_JSON = parseObject();
                 } else {
-                    auto o = std::make_shared<variant_t>(JSList());
-                    m_Scopes.push(o);
-                    m_JSON = std::get<JSList>(*o);
+                    m_Stream.next();
+                    m_JSON = parseList();
                 } break;
             case BOOL:
-                parseLiteral<bool>();
+                m_JSON = ftk.value[0] == 't';
                 return m_JSON;
             default:
-                parseLiteral<std::string>();
-                return m_JSON;
+                m_JSON = std::move(ftk.value);
         }
 
-        while (!m_Stream.eof()) {
-            Token e = m_Stream.next();
-            if (is_obj) {
-                m_Stream.next();
-            }
-        }
+        // uncomment to check the stream's output (for debugging purpose)
+//        while (!m_Stream.eof()) {
+//
+//            std::cout << m_Stream.p_CurTk.type << " : " << m_Stream.p_CurTk.value << std::endl;
+//            m_Stream.next();
+//        }
         return m_JSON;
     }
 };
