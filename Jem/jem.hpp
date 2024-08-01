@@ -2,12 +2,13 @@
 #include <string>
 #include <fstream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <variant>
 #include <cstdint>
 #include <optional>
 #include <iostream>
-
+#include <filesystem>
 
 #pragma once
 namespace {
@@ -284,19 +285,19 @@ using JSList   = std::vector<JSON_t>;
 struct JSON_t : std::variant<std::string, bool, JSObject, JSList> {
     using variant::variant;
 
-    [[nodiscard]] std::string getString() const {
+    [[nodiscard]] std::string toString() const {
         return std::get<std::string>(*this);
     }
 
-    [[nodiscard]] bool getBool() const {
+    [[nodiscard]] bool toBool() const {
         return std::get<bool>(*this);
     }
 
-    [[nodiscard]] JSObject getObject() const {
+    [[nodiscard]] JSObject toObject() const {
         return std::get<JSObject>(*this);
     }
 
-    [[nodiscard]] JSList getList() {
+    [[nodiscard]] JSList toList() const {
         return std::get<JSList>(*this);
     }
 
@@ -410,20 +411,19 @@ class Json {
 public:
     Json() = default;
 
-    explicit Json(const std::string& path) : m_FStream(path) {
+    explicit Json(const std::filesystem::path& path) : m_FStream(path) {
         if (!m_FStream.is_open())
-            throw std::runtime_error("Unable to read the file: " + path);
+            throw std::runtime_error("Unable to read the file: " + path.string());
 
         m_Src = {std::istreambuf_iterator<char>(m_FStream), std::istreambuf_iterator<char>()};
         m_IS  = InputStream(std::move(m_Src));
         m_Stream = TokenStream(m_IS);
     }
 
-    void constructWithString(const std::string& source) noexcept { m_Src = source; }
+    explicit Json(std::string source) noexcept : m_Src(std::move(source)) {}
 
     const JSON_t& dump(const std::optional<std::string>& key = std::nullopt) {
         Token ftk    = m_Stream.next();
-        bool  is_obj = false;
 
         switch (ftk.type) {
             case PUNC:
