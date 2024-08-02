@@ -13,7 +13,7 @@
 #pragma once
 namespace {
 enum TokenType {
-    PUNC, STRING, NUMBER, BOOL, J_NULL, NONE, _NONE
+    PUNC, STRING, NUMBER, BOOL, J_NULL, COMMENT, NONE, _NONE
 };
 
 struct Token {
@@ -117,7 +117,7 @@ private:
     }
 
     static bool isPunctuation(char chr) {
-        return "();,{}[]"sv.find(chr) >= 0;
+        return "();,{}[]/"sv.find(chr) >= 0;
     }
 
     static bool isOpChar(char _chr) {
@@ -194,9 +194,6 @@ private:
             case '"':
                 return readString();
 
-            case '\'':
-                return readString('\'');
-
             case 't':
             case 'f':
             case 'n': {
@@ -210,6 +207,14 @@ private:
                         .value = readWhile(isId)
                 };
             }
+
+            case '/':
+                return {
+                    .type = COMMENT,
+                    .value = readWhile([](char c) {
+                        return c != '\n';
+                    })
+                };
 
             default:
                 if (isDigit(chr)) return readNumber();
@@ -251,11 +256,11 @@ public:
         Token cur_tk = readNextTok();
 
         // discard all the junk
-        while (cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) {
+        while ((cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) || cur_tk.type == COMMENT) {
             cur_tk = readNextTok();
         }
 
-        while (cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) {
+        while ((cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) || cur_tk.type == COMMENT){
             cur_tk = readNextTok();
         }
 

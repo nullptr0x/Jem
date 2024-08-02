@@ -4,15 +4,16 @@ Just a simple, single-header, modern C++ (17) library for parsing JSON.
 # Usage example
 First, make sure the JSON file is correct as the library doesn't check for errors. Now here's how you can extract what you need out of this nonsense:
 ```json
+// comments are supported
 {
-  "no-key": null,
+  "key": null,
   "todos": [
-    "do the laundry",
+    "do the laundry",  // <-- let's extract this
     "work"
   ],
 
-  "pings": 3293293923,
-  "cake-left": 0.00010212121
+  "pings": 32932939231212,
+  "cake-left": 0.0001021212112
 }
 ```
 <br/>
@@ -39,5 +40,5 @@ int main() {
 
 # Trivia
 - Numbers aren't kept in their own type but rather in an `std::string` to prevent precision loss.
-- The type `jem::JSON_t` returned by dump, is defined as `std::variant<std::string, bool, JSObject, JSList, std::nullptr_t>`
+- The type `jem::JSON_t` returned by dump, is basically an abstraction over `std::variant<std::string, bool, JSObject, JSList, std::nullptr_t>`.
 - The lib internally uses a recursive-descent approach for parsing. 

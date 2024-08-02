@@ -1,15 +1,11 @@
-[
-  {
-    "key": null,
-    ":)": [
-      "E"
-    ]
-  },
+// comments are supported
+{
+  "key": null,
+  "todos": [
+    "do the laundry",  // <-- let's extract this
+    "work"
+  ],
 
-  {
-    "key": "ctrl +",
-    "task": [
-      "do the laundry"
-    ]
-  }
-]
+  "pings": 32932939231212,
+  "cake-left": 0.0001021212112
+}
