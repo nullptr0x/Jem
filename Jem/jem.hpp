@@ -139,7 +139,6 @@ private:
         return ret;
     }
 
-    /* Used to start reading a m_Stream of characters till the `_end` char is hit. */
     std::string readEscaped(char _end) {
         uint8_t is_escaped = false;
         std::string ret;
@@ -148,10 +147,20 @@ private:
         while (!m_Stream.eof()) {
             char chr = m_Stream.next();
             if (is_escaped) {
-                ret += chr;
+                switch (chr) {
+                    case 'n': ret += '\n'; break;
+                    case 't': ret += '\t'; break;
+                    case 'r': ret += '\r'; break;
+                    case 'b': ret += '\b'; break;
+                    case 'f': ret += '\f'; break;
+                    case '\\': ret += '\\'; break;
+                    case '\"': ret += '\"'; break;
+                    case '\'': ret += '\''; break;
+                    case '0': ret += '\0'; break;
+                    default: ret += '\\'; ret += chr; break;
+                }
                 is_escaped = false;
             } else if (chr == '\\') {
-                ret += '\\';
                 is_escaped = true;
             }
             else if (chr == _end)
@@ -263,7 +272,6 @@ public:
         while ((cur_tk.type == PUNC && (cur_tk.value == " " || cur_tk.value == "\t" || cur_tk.value == "\n")) || cur_tk.type == COMMENT){
             cur_tk = readNextTok();
         }
-
 
         if (modify_pCur) p_CurTk = cur_tk;
         return cur_tk;
