@@ -116,10 +116,6 @@ private:
         return ('A' <= chr && chr <= 'Z') || ('a' <= chr && chr <= 'z');
     }
 
-    static bool isPunctuation(char chr) {
-        return "();,{}[]/"sv.find(chr) >= 0;
-    }
-
     static bool isOpChar(char _chr) {
         return "+-/*><="sv.find(_chr) != std::string::npos;
     }
@@ -128,7 +124,6 @@ private:
         return " \t\n"sv.find(_chr) != std::string::npos;
     }
 
-    /* Read and return the characters until the given boolean function evaluates to true. */
     std::string readWhile(const std::function<bool (char)>& delimiter) {
         std::string ret;
         while (!m_Stream.eof()) {
@@ -227,7 +222,7 @@ private:
 
             default:
                 if (isDigit(chr)) return readNumber();
-                if (isPunctuation(chr)) {
+                else {
                     m_Ret = std::string(1, m_Stream.next());
                     return {
                             PUNC,
